@@ -8,7 +8,7 @@ fn reverse_byte(b: u8) -> u8 {
 pub fn interleave(data: [u8; 162]) -> [u8; 162] {
     let mut interleaved: [u8; 162] = [0; 162];
 
-    let rmap = (0..255).map(|x| reverse_byte(x)).filter(|x| *x < 162);
+    let rmap = (0..255).map(|x| reverse_byte(x)).filter(|&x| x < 162);
     for (n, r) in rmap.enumerate() {
         interleaved[r as usize] = data[n];
     }

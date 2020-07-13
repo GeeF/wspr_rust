@@ -20,7 +20,10 @@ pub fn convolve(input: [u8; 50]) -> Result<[u8; 162], ()> {
     let mut encoded: [u8; 162] = [0; 162];
     let mut register: u32 = 0;
 
-    // TODO: check bits are actually only 0 || 1
+    // check bits are actually only 0 or 1
+    if input.iter().any(|&x| x != 0 && x != 1) {
+        return Err(())
+    }
 
     // extend data to 81 bits for the tail shiftout of the codec
     let mut data: [u8; 81] = [0; 81];
@@ -50,14 +53,18 @@ fn test_parity() {
 fn test_convolve() {
     // expected values verified by infallible manual calculation
     let mut d = [0u8; 50];
-    d[49] = 0xDB;
+    for i in 0..8 {
+        d[50-8+i] = (0xDB >> (7-i)) & 0x01;
+    }
 
     let e = convolve(d).unwrap();
     assert_eq!(e[49*2], 1);
     assert_eq!(e[49*2+1], 1);
 
     let mut d = [0u8; 50];
-    d[49] = 0xAF;
+    for i in 0..8 {
+        d[50-8+i] = (0xAF >> (7-i)) & 0x01;
+    }
 
     let e = convolve(d).unwrap();
     assert_eq!(e[49*2], 1);
