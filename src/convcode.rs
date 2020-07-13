@@ -14,15 +14,9 @@ fn parity(val: u32) -> u8 {
     ((0x6996 >> v) & 1) as u8
 }
 
-/// bit magic to reverse the bit positions of a byte
-fn reverse_byte(b: u8) -> u8 {
-    (((b as u64 * 0x0802u64 & 0x22110u64) | (b as u64 * 0x8020u64 & 0x88440u64)) * 0x10101u64 >> 16)
-        as u8
-}
-
 /// Convolutional coder with contraint lenght K=32, coding rate=1/2, non-systematic, non-recursive
 /// Input is the 50 bit source encoded and packed payload
-pub fn encode(input: [u8; 50]) -> Result<[u8; 162], ()> {
+pub fn convolve(input: [u8; 50]) -> Result<[u8; 162], ()> {
     let mut encoded: [u8; 162] = [0; 162];
     let mut register: u32 = 0;
 
@@ -53,26 +47,19 @@ fn test_parity() {
 }
 
 #[test]
-fn test_reverse() {
-    assert_eq!(reverse_byte(0b00000001), 0b10000000);
-    assert_eq!(reverse_byte(0b11110000), 0b00001111);
-    assert_eq!(reverse_byte(0b10101010), 0b01010101);
-}
-
-#[test]
-fn test_encode() {
+fn test_convolve() {
     // expected values verified by infallible manual calculation
     let mut d = [0u8; 50];
     d[49] = 0xDB;
 
-    let e = encode(d).unwrap();
+    let e = convolve(d).unwrap();
     assert_eq!(e[49*2], 1);
     assert_eq!(e[49*2+1], 1);
 
     let mut d = [0u8; 50];
     d[49] = 0xAF;
 
-    let e = encode(d).unwrap();
+    let e = convolve(d).unwrap();
     assert_eq!(e[49*2], 1);
     assert_eq!(e[49*2+1], 1);
 }
