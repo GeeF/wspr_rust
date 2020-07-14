@@ -11,9 +11,18 @@ static SYNC_VECTOR: [u8; 162] = [
     0, 0,
 ];
 
+#[derive(Copy, Clone)]
 pub enum FrameType {
     Standard,
     Extended,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ErrorCode {
+    ConvolutionBitSetError, // A "bit" in one of the representational u8s was not 0 or 1
+    CallsignEncodeError,    // Callsign does not match format for the selected FrameType
+    LocatorEncodeError,     // Locator does not match format for the selected FrameType
+    PowerEncodeError,       // Power does not match format for the selected FrameType
 }
 
 pub struct WSPRMessage {
@@ -44,11 +53,10 @@ impl WSPRMessage {
     }
 
     /// Get the channel encoded 4-FSK symbols for a standard message
-    pub fn encode(&self) -> Result<[u8; 162], ()> {
-        let mut encoded_frame: [u8; 162] = [0; 162];
+    pub fn encode(&self) -> Result<[u8; 162], ErrorCode> {
+        let mut encoded_frame = [0u8; 162];
         // TODO:
         // source encode parameters -> src_frame (pack)
-        
         // src frame for testing...
         let mut src_frame: [u8; 50] = [0; 50];
         src_frame[1] = 1;
@@ -57,7 +65,6 @@ impl WSPRMessage {
         src_frame[30] = 1;
 
         let interleaved_frame = interleave(convolve(src_frame)?);
-        
         for (i, elem) in interleaved_frame.iter().enumerate() {
             encoded_frame[i as usize] = SYNC_VECTOR[i] + 2 * elem;
         }
@@ -78,30 +85,58 @@ struct SourceFrame {
     frametype: FrameType,
 }
 
-fn source_encode_callsign(callsign: &str) -> u32 {
-    // callsign regex R"(^[A-Za-z0-9/]+$)" : R"(^[A-Za-z0-9]+$)"
-    0
-}
-
-fn source_encode_locator(locator: &str) -> u32 {
-    // validate: https://github.com/roelandjansen/wsjt-x/blob/master/validators/MaidenheadLocatorValidator.cpp
-    0
-}
-
-fn source_encode_power(power: u8) -> u8 {
-    power
-}
-
 /// SourceFrame containing the source encoded frame parameters
 impl SourceFrame {
-    fn new(msg: WSPRMessage, frametype: FrameType) -> Self {
-        Self {
+    fn new(msg: WSPRMessage, frametype: FrameType) -> Result<Self, ErrorCode> {
+        Ok(Self {
+            callsign: source_encode_callsign(&msg.callsign, frametype)?,
+            locator: source_encode_locator(&msg.locator, frametype)?,
+            power: source_encode_power(msg.power, frametype)?,
             frametype: frametype,
-            callsign: source_encode_callsign(&msg.callsign),
-            locator: source_encode_locator(&msg.locator),
-            power: source_encode_power(msg.power),
-        }
+        })
     }
+
+    fn packed_src_frame(&self) -> [u8; 50] {
+        [0u8; 50]
+    }
+}
+
+/// shift all elements in the char array to the right. Will cut the right most element if present
+fn prepend_space(arr: &mut [char]) {
+    for i in 0..5 {
+        arr[5-i] = arr[4-i];
+    }
+    arr[0] = ' ';
+}
+
+fn source_encode_callsign(callsign: &str, frametype: FrameType) -> Result<u32, ErrorCode> {
+    // callsign regex R"(^[A-Za-z0-9/]+$)" : R"(^[A-Za-z0-9]+$)"
+    if callsign.len() < 3 || callsign.len() > 6 {
+        return Err(ErrorCode::CallsignEncodeError);
+    }
+    let mut callsign_arr: [char; 6] = [' '; 6];
+    for (n, c) in callsign.chars().enumerate() {
+        callsign_arr[n] = c;
+    }
+    println!("a: {:?}", callsign_arr);
+    prepend_space(&mut callsign_arr);
+    println!("a shifted: {:?}", callsign_arr);
+    // match frametype {
+    //     FrameType::Standard => match callsign {
+    //         (_, _, _, _, _, _) => println!("std"),
+    //     },
+    //     FrameType::Extended => println!("ext1"),
+    // }
+    Ok(0u32)
+}
+
+fn source_encode_locator(locator: &str, frametype: FrameType) -> Result<u32, ErrorCode> {
+    // validate: https://github.com/roelandjansen/wsjt-x/blob/master/validators/MaidenheadLocatorValidator.cpp
+    Ok(0u32)
+}
+
+fn source_encode_power(power: u8, frametype: FrameType) -> Result<u8, ErrorCode> {
+    Ok(0u8)
 }
 
 #[test]

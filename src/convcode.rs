@@ -1,3 +1,5 @@
+use crate::wspr::ErrorCode;
+
 /// Layland Lushbaugh generator polynomials
 static POLY1: u32 = 0xF2D05351;
 static POLY2: u32 = 0xE4613C47;
@@ -16,13 +18,13 @@ fn parity(val: u32) -> u8 {
 
 /// Convolutional coder with contraint lenght K=32, coding rate=1/2, non-systematic, non-recursive
 /// Input is the 50 bit source encoded and packed payload
-pub fn convolve(input: [u8; 50]) -> Result<[u8; 162], ()> {
+pub fn convolve(input: [u8; 50]) -> Result<[u8; 162], ErrorCode> {
     let mut encoded: [u8; 162] = [0; 162];
     let mut register: u32 = 0;
 
     // check bits are actually only 0 or 1
     if input.iter().any(|&x| x != 0 && x != 1) {
-        return Err(())
+        return Err(ErrorCode::ConvolutionBitSetError)
     }
 
     // extend data to 81 bits for the tail shiftout of the codec
@@ -69,4 +71,12 @@ fn test_convolve() {
     let e = convolve(d).unwrap();
     assert_eq!(e[49*2], 1);
     assert_eq!(e[49*2+1], 1);
+}
+
+#[test]
+fn test_convolve_error() {
+    let mut d = [0u8; 50];
+    d[0] = 0x02;
+    let e = convolve(d);
+    assert!(e.is_err());
 }
