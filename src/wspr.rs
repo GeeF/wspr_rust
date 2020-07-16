@@ -106,7 +106,6 @@ fn encode_char(c: char) -> u8 {
 
 /// tbw: steps
 fn source_encode_callsign(callsign: &str) -> Result<u32, ErrorCode> {
-    // callsign regex R"(^[A-Za-z0-9/]+$)" : R"(^[A-Za-z0-9]+$)"
     if callsign.len() < 3 || callsign.len() > 6 {
         return Err(ErrorCode::CallsignEncodeError);
     }
@@ -116,6 +115,7 @@ fn source_encode_callsign(callsign: &str) -> Result<u32, ErrorCode> {
         callsign_arr[n] = c;
     }
 
+    // position 3 needs to be a number, shift shorter callsigns to the right
     match callsign_arr[2] {
         '0'..='9' => (),
         _ => prepend_space(&mut callsign_arr),
@@ -126,7 +126,7 @@ fn source_encode_callsign(callsign: &str) -> Result<u32, ErrorCode> {
         _ => return Err(ErrorCode::CallsignEncodeError),
     }
     
-    // encode characters
+    // encode characters, packed to 28 bits maximum
     let mut encoded_callsign = encode_char(callsign_arr[0]) as u32;
     encoded_callsign = encode_char(callsign_arr[1]) as u32 + encoded_callsign * 36;
     encoded_callsign = encode_char(callsign_arr[2]) as u32 + encoded_callsign * 10;
@@ -138,9 +138,6 @@ fn source_encode_callsign(callsign: &str) -> Result<u32, ErrorCode> {
 }
 
 fn source_encode_locator(locator: &str) -> Result<u32, ErrorCode> {
-    // validate: https://github.com/roelandjansen/wsjt-x/blob/master/validators/MaidenheadLocatorValidator.cpp
-    // std: 4 character locator
-    // extended: 6 character locator
     Ok(0u32)
 }
 
