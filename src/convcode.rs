@@ -1,8 +1,8 @@
 use crate::wspr::ErrorCode;
 
 /// Layland Lushbaugh generator polynomials
-static POLY1: u32 = 0xF2D05351;
-static POLY2: u32 = 0xE4613C47;
+static POLY1: u32 = 0xF2D0_5351;
+static POLY2: u32 = 0xE461_3C47;
 
 /// compute the even parity of a u32
 /// used here as the modulo-2 adder of bits selected by the generator polynomials
@@ -16,7 +16,7 @@ fn parity(val: u32) -> u8 {
     ((0x6996 >> v) & 1) as u8
 }
 
-/// Convolutional coder with contraint lenght K=32, coding rate=1/2, non-systematic, non-recursive
+/// Convolutional coder with constraint lenght K=32, coding rate=1/2, non-systematic, non-recursive
 /// Input is the 50 bit source encoded and packed payload
 pub fn convolve(input: [u8; 50]) -> Result<[u8; 162], ErrorCode> {
     let mut encoded: [u8; 162] = [0; 162];
