@@ -46,19 +46,12 @@ impl WSPRMessage {
     /// Get the channel encoded 4-FSK symbols for a standard message
     pub fn encode(&self) -> Result<[u8; 162], ErrorCode> {
         let mut encoded_frame = [0u8; 162];
-        // TODO:
-        // source encode parameters -> src_frame (pack)
-        // src frame for testing...
-        let mut src_frame: [u8; 50] = [0; 50];
-        src_frame[1] = 1;
-        src_frame[2] = 1;
-        src_frame[10] = 1;
-        src_frame[30] = 1;
-
-        let interleaved_frame = interleave(convolve(src_frame)?);
+        let s = SourceFrame::new(self)?;
+        let interleaved_frame = interleave(convolve(s.packed_src_frame())?);
         for (i, elem) in interleaved_frame.iter().enumerate() {
             encoded_frame[i as usize] = SYNC_VECTOR[i] + 2 * elem;
         }
+
         Ok(encoded_frame)
     }
 
@@ -95,34 +88,59 @@ impl SourceFrame {
 /// shift all elements in the char array to the right. Will cut the right most element if present
 fn prepend_space(arr: &mut [char]) {
     for i in 0..5 {
-        arr[5-i] = arr[4-i];
+        arr[5 - i] = arr[4 - i];
     }
     arr[0] = ' ';
 }
 
-fn source_encode_callsign(callsign: &str, frametype: FrameType) -> Result<u32, ErrorCode> {
+/// Encode a single character according to the WSPR spec
+/// Illegal characters should be checked before this
+fn encode_char(c: char) -> u8 {
+    match c {
+        '0'..='9' => c as u8 - 48, // '0'-'9' as 0-9
+        'A'..='Z' => c as u8 - 55, // 'A'-'Z' as 10-35
+        ' ' => 36,                 // space is 36
+        _ => 0                     // illegal char: 0
+    }
+}
+
+/// tbw: steps
+fn source_encode_callsign(callsign: &str) -> Result<u32, ErrorCode> {
     // callsign regex R"(^[A-Za-z0-9/]+$)" : R"(^[A-Za-z0-9]+$)"
     if callsign.len() < 3 || callsign.len() > 6 {
         return Err(ErrorCode::CallsignEncodeError);
     }
+
     let mut callsign_arr: [char; 6] = [' '; 6];
-    for (n, c) in callsign.chars().enumerate() {
+    for (n, c) in callsign.to_uppercase().chars().enumerate() {
         callsign_arr[n] = c;
     }
-    println!("a: {:?}", callsign_arr);
-    prepend_space(&mut callsign_arr);
-    println!("a shifted: {:?}", callsign_arr);
-    // match frametype {
-    //     FrameType::Standard => match callsign {
-    //         (_, _, _, _, _, _) => println!("std"),
-    //     },
-    //     FrameType::Extended => println!("ext1"),
-    // }
-    Ok(0u32)
+
+    match callsign_arr[2] {
+        '0'..='9' => (),
+        _ => prepend_space(&mut callsign_arr),
+    }
+
+    match (callsign_arr[0], callsign_arr[1], callsign_arr[2]) {
+        (' ', 'A'..='Z', '0'..='9') | ('A'..='Z', 'A'..='Z', '0'..='9') => (),
+        _ => return Err(ErrorCode::CallsignEncodeError),
+    }
+    
+    // encode characters
+    let mut encoded_callsign = encode_char(callsign_arr[0]) as u32;
+    encoded_callsign = encode_char(callsign_arr[1]) as u32 + encoded_callsign * 36;
+    encoded_callsign = encode_char(callsign_arr[2]) as u32 + encoded_callsign * 10;
+    encoded_callsign = encode_char(callsign_arr[3]) as u32 + encoded_callsign * 27;
+    encoded_callsign = encode_char(callsign_arr[4]) as u32 + encoded_callsign * 27;
+    encoded_callsign = encode_char(callsign_arr[5]) as u32 + encoded_callsign * 27;
+
+    Ok(encoded_callsign)
 }
 
 fn source_encode_locator(locator: &str) -> Result<u32, ErrorCode> {
     // validate: https://github.com/roelandjansen/wsjt-x/blob/master/validators/MaidenheadLocatorValidator.cpp
+    // std: 4 character locator
+    // extended: 6 character locator
     Ok(0u32)
 }
 
