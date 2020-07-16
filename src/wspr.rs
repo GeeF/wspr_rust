@@ -146,5 +146,55 @@ fn test_encode() {
 
 #[test]
 fn test_decode() {
-    let msg = WSPRMessage::decode([0; 162]);
+    let _msg = WSPRMessage::decode([0; 162]);
+}
+
+#[test]
+fn test_src_encode_error_callsign_too_short() {
+    let callsign = "DB"; // too short
+    let e = source_encode_callsign(callsign);
+    assert_eq!(e.unwrap_err(), ErrorCode::CallsignEncodeError);
+}
+
+#[test]
+fn test_src_encode_error_callsign_too_long() {
+    let callsign = "XXXXXXX"; // longer than 6 chars
+    let e = source_encode_callsign(callsign);
+    assert_eq!(e.unwrap_err(), ErrorCode::CallsignEncodeError);
+}
+
+#[test]
+fn test_src_encode_error_callsign_3rd_not_none() {
+    let callsign = "DDDDDD"; // 3rd char is NaN
+    let e = source_encode_callsign(callsign);
+    assert_eq!(e.unwrap_err(), ErrorCode::CallsignEncodeError);
+}
+
+#[test]
+fn test_src_encode_error_callsign_3rd_nan_after_move() {
+    let callsign = "2XYZ"; // 3rd char is NaN even after move
+    let e = source_encode_callsign(callsign);
+    assert_eq!(e.unwrap_err(), ErrorCode::CallsignEncodeError);
+}
+
+#[test]
+fn test_src_encode_error_callsign_illegal_chars() {
+    let callsign = "   "; // spaces only allowed in first place
+    let e = source_encode_callsign(callsign);
+    assert_eq!(e.unwrap_err(), ErrorCode::CallsignEncodeError);
+}
+
+#[test]
+fn test_src_encode_prepend() {
+    let mut callsign: [char; 6] = ['K', '1', 'J', 'T', ' ', ' '];
+    prepend_space(&mut callsign);
+    assert_eq!(callsign[2], '1');
+}
+
+#[test]
+fn test_src_encode_callsign() {
+    let callsign = "DB2LA";
+    let src_encoded = source_encode_callsign(callsign).unwrap();
+    println!("e: {:x}", src_encoded);
+    assert_eq!(src_encoded, 0x59f7627);
 }
