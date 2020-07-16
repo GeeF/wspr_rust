@@ -34,7 +34,7 @@ impl WSPRMessage {
         }
     }
 
-    pub fn decode(symbols: [u8; 162]) -> Self {
+    pub fn decode(_symbols: [u8; 162]) -> Self {
         // decode symbols => fano metric sequential decoder?
         Self {
             callsign: "".to_string(),
@@ -64,8 +64,7 @@ impl WSPRMessage {
 /// Source encoded WSPR frame
 struct SourceFrame {
     callsign: u32,
-    locator: u32,
-    power: u8,
+    locator_power: u32,
 }
 
 /// SourceFrame containing the source encoded frame parameters
@@ -73,15 +72,20 @@ impl SourceFrame {
     fn new(msg: &WSPRMessage) -> Result<Self, ErrorCode> {
         Ok(Self {
             callsign: source_encode_callsign(&msg.callsign)?,
-            locator: source_encode_locator(&msg.locator)?,
-            power: source_encode_power(msg.power)?,
+            locator_power: source_encode_locator_power(&msg.locator, msg.power)?,
         })
     }
 
     fn packed_src_frame(&self) -> [u8; 50] {
-        // -> struct member? calculate in new? what about extended then?
-        let _encoded = self.callsign + self.locator + self.power as u32;
-        [0u8; 50]
+        // pack into one u64 with only the right most 50 bits used
+        let encoded = (self.callsign as u64) << 22 | self.locator_power as u64;
+
+        let mut packed_src_frame: [u8; 50] = [0; 50];
+        for i in 0..50 {
+            packed_src_frame[i] = (encoded >> (50 - i - 1) & 1) as u8;
+        }
+
+        packed_src_frame
     }
 }
 
@@ -94,13 +98,23 @@ fn prepend_space(arr: &mut [char]) {
 }
 
 /// Encode a single character according to the WSPR spec
+/// 
 /// Illegal characters should be checked before this
 fn encode_char(c: char) -> u8 {
     match c {
         '0'..='9' => c as u8 - 48, // '0'-'9' as 0-9
         'A'..='Z' => c as u8 - 55, // 'A'-'Z' as 10-35
         ' ' => 36,                 // space is 36
-        _ => 0                     // illegal char: 0
+        _ => 0,                    // illegal char: 0
+    }
+}
+
+/// Characters only fields are encoded as 0-26
+fn encode_alpha_only(c: char) -> u8 {
+    match c {
+        'A'..='Z' => c as u8 - 65,
+        ' ' => 26,
+        _ => 0,
     }
 }
 
@@ -125,28 +139,58 @@ fn source_encode_callsign(callsign: &str) -> Result<u32, ErrorCode> {
         (' ', 'A'..='Z', '0'..='9') | ('A'..='Z', 'A'..='Z', '0'..='9') => (),
         _ => return Err(ErrorCode::CallsignEncodeError),
     }
-    
     // encode characters, packed to 28 bits maximum
     let mut encoded_callsign = encode_char(callsign_arr[0]) as u32;
     encoded_callsign = encode_char(callsign_arr[1]) as u32 + encoded_callsign * 36;
     encoded_callsign = encode_char(callsign_arr[2]) as u32 + encoded_callsign * 10;
-    encoded_callsign = encode_char(callsign_arr[3]) as u32 + encoded_callsign * 27;
-    encoded_callsign = encode_char(callsign_arr[4]) as u32 + encoded_callsign * 27;
-    encoded_callsign = encode_char(callsign_arr[5]) as u32 + encoded_callsign * 27;
+    encoded_callsign = encode_alpha_only(callsign_arr[3]) as u32 + encoded_callsign * 27;
+    encoded_callsign = encode_alpha_only(callsign_arr[4]) as u32 + encoded_callsign * 27;
+    encoded_callsign = encode_alpha_only(callsign_arr[5]) as u32 + encoded_callsign * 27;
 
     Ok(encoded_callsign)
 }
 
-fn source_encode_locator(locator: &str) -> Result<u32, ErrorCode> {
-    Ok(0u32)
-}
-
-fn source_encode_power(power: u8) -> Result<u8, ErrorCode> {
-    match power {
-        0..=60 => (),
-        _ => return Err(ErrorCode::PowerEncodeError),
+/// Source encoding for locator and power
+/// Both are combine in the final step
+fn source_encode_locator_power(locator: &str, power: u8) -> Result<u32, ErrorCode> {
+    if locator.len() != 4 {
+        return Err(ErrorCode::LocatorEncodeError);
     }
-    Ok(0u8)
+
+    let mut locator_arr: [char; 4] = [' '; 4];
+    for (n, c) in locator.to_uppercase().chars().enumerate() {
+        locator_arr[n] = c;
+    }
+
+    // check locator format
+    match (
+        locator_arr[0],
+        locator_arr[1],
+        locator_arr[2],
+        locator_arr[3],
+    ) {
+        ('A'..='R', 'A'..='R', '0'..='9', '0'..='9') => (),
+        _ => return Err(ErrorCode::LocatorEncodeError),
+    }
+    
+    let encoded_chars: [u32; 4] = [
+        encode_alpha_only(locator_arr[0]) as u32,
+        encode_alpha_only(locator_arr[1]) as u32,
+        encode_char(locator_arr[2]) as u32,
+        encode_char(locator_arr[3]) as u32,
+    ];
+
+    let encoded_locator = ((179 - 10 * encoded_chars[0] as i32 - encoded_chars[2] as i32) as i32) * (180
+        + 10 * encoded_chars[1]
+        + encoded_chars[3]) as i32;
+
+    // check power
+    if power > 60 {
+        return Err(ErrorCode::PowerEncodeError);
+    }
+
+    // cobine locator and power
+    Ok(128 * encoded_locator as u32 + 64 + power as u32)
 }
 
 #[test]
@@ -212,4 +256,27 @@ fn test_src_encode_callsign() {
     let src_encoded = source_encode_callsign(callsign).unwrap();
     println!("e: {:x}", src_encoded);
     assert_eq!(src_encoded, 0x59f7627);
+}
+
+#[test]
+fn test_src_encode_mixed_case_callsign() {
+    let callsign = "dB2La";
+    let src_encoded = source_encode_callsign(callsign).unwrap();
+    println!("e: {:x}", src_encoded);
+    assert_eq!(src_encoded, 0x59f7627);
+}
+
+#[test]
+fn test_src_encode_locator_power() {
+    let locator = "JO43";
+    let src_encoded = source_encode_locator_power(locator, 30).unwrap();
+    println!("e: {:x}", src_encoded);
+    assert_eq!(src_encoded, 0x59f7627);
+}
+// TODO: locator_power encode errors
+
+#[test]
+fn test_packed_src_frame() {
+    let src_frame = SourceFrame::new(&WSPRMessage::new("DB2LA", "JO43", 30)).unwrap();
+    src_frame.packed_src_frame();
 }
