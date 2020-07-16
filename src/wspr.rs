@@ -98,7 +98,7 @@ fn prepend_space(arr: &mut [char]) {
 }
 
 /// Encode a single character according to the WSPR spec
-/// 
+///
 /// Illegal characters should be checked before this
 fn encode_char(c: char) -> u8 {
     match c {
@@ -180,9 +180,9 @@ fn source_encode_locator_power(locator: &str, power: u8) -> Result<u32, ErrorCod
         encode_char(locator_arr[3]) as u32,
     ];
 
-    let encoded_locator = ((179 - 10 * encoded_chars[0] as i32 - encoded_chars[2] as i32) as i32) * (180
-        + 10 * encoded_chars[1]
-        + encoded_chars[3]) as i32;
+    let encoded_locator = (179 - 10 * encoded_chars[0] as i32 - encoded_chars[2] as i32) * 180
+        + 10 * encoded_chars[1] as i32
+        + encoded_chars[3] as i32;
 
     // check power
     if power > 60 {
@@ -190,7 +190,7 @@ fn source_encode_locator_power(locator: &str, power: u8) -> Result<u32, ErrorCod
     }
 
     // cobine locator and power
-    Ok(128 * encoded_locator as u32 + 64 + power as u32)
+    Ok(encoded_locator as u32 * 128 + 64 + power as u32)
 }
 
 #[test]
