@@ -11,12 +11,6 @@ static SYNC_VECTOR: [u8; 162] = [
     0, 0,
 ];
 
-#[derive(Copy, Clone)]
-pub enum FrameType {
-    Standard,
-    Extended,
-}
-
 #[derive(Debug, PartialEq)]
 pub enum ErrorCode {
     ConvolutionBitSetError, // A "bit" in one of the representational u8s was not 0 or 1
@@ -29,16 +23,14 @@ pub struct WSPRMessage {
     pub callsign: String,
     pub locator: String,
     pub power: u8,
-    pub frametype: FrameType,
 }
 
 impl WSPRMessage {
-    pub fn new(callsign: &str, locator: &str, power: u8, frametype: FrameType) -> Self {
+    pub fn new(callsign: &str, locator: &str, power: u8) -> Self {
         Self {
             callsign: callsign.to_string(),
             locator: locator.to_string(),
-            power: power,
-            frametype: frametype,
+            power,
         }
     }
 
@@ -48,7 +40,6 @@ impl WSPRMessage {
             callsign: "".to_string(),
             locator: "".to_string(),
             power: 0,
-            frametype: FrameType::Standard,
         }
     }
 
@@ -82,21 +73,21 @@ struct SourceFrame {
     callsign: u32,
     locator: u32,
     power: u8,
-    frametype: FrameType,
 }
 
 /// SourceFrame containing the source encoded frame parameters
 impl SourceFrame {
-    fn new(msg: WSPRMessage, frametype: FrameType) -> Result<Self, ErrorCode> {
+    fn new(msg: &WSPRMessage) -> Result<Self, ErrorCode> {
         Ok(Self {
-            callsign: source_encode_callsign(&msg.callsign, frametype)?,
-            locator: source_encode_locator(&msg.locator, frametype)?,
-            power: source_encode_power(msg.power, frametype)?,
-            frametype: frametype,
+            callsign: source_encode_callsign(&msg.callsign)?,
+            locator: source_encode_locator(&msg.locator)?,
+            power: source_encode_power(msg.power)?,
         })
     }
 
     fn packed_src_frame(&self) -> [u8; 50] {
+        // -> struct member? calculate in new? what about extended then?
+        let _encoded = self.callsign + self.locator + self.power as u32;
         [0u8; 50]
     }
 }
@@ -130,18 +121,22 @@ fn source_encode_callsign(callsign: &str, frametype: FrameType) -> Result<u32, E
     Ok(0u32)
 }
 
-fn source_encode_locator(locator: &str, frametype: FrameType) -> Result<u32, ErrorCode> {
+fn source_encode_locator(locator: &str) -> Result<u32, ErrorCode> {
     // validate: https://github.com/roelandjansen/wsjt-x/blob/master/validators/MaidenheadLocatorValidator.cpp
     Ok(0u32)
 }
 
-fn source_encode_power(power: u8, frametype: FrameType) -> Result<u8, ErrorCode> {
+fn source_encode_power(power: u8) -> Result<u8, ErrorCode> {
+    match power {
+        0..=60 => (),
+        _ => return Err(ErrorCode::PowerEncodeError),
+    }
     Ok(0u8)
 }
 
 #[test]
 fn test_encode() {
-    let msg = WSPRMessage::new("DB2LA", "JO43", 30, FrameType::Standard);
+    let msg = WSPRMessage::new("DB2LA", "JO43", 30);
     let channel_encoded = msg.encode().unwrap();
     for i in channel_encoded.iter() {
         print!("{}, ", i);
