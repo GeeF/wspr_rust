@@ -2,6 +2,7 @@
 use crate::convcode::convolve;
 use crate::interleave::interleave;
 
+/// Used to construct the final channel symbols from the convolved and interleaved data
 static SYNC_VECTOR: [u8; 162] = [
     1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0,
     0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0,
@@ -14,9 +15,9 @@ static SYNC_VECTOR: [u8; 162] = [
 #[derive(Debug, PartialEq)]
 pub enum ErrorCode {
     ConvolutionBitSetError, // A "bit" in one of the representational u8s was not 0 or 1
-    CallsignEncodeError,    // Callsign does not match format for the selected FrameType
-    LocatorEncodeError,     // Locator does not match format for the selected FrameType
-    PowerEncodeError,       // Power does not match format for the selected FrameType
+    CallsignEncodeError,    // Callsign does not match WSPR spec
+    LocatorEncodeError,     // Locator does not match WSPR spec
+    PowerEncodeError,       // Power does not match WSPR spec
 }
 
 pub struct WSPRMessage {
@@ -35,7 +36,7 @@ impl WSPRMessage {
     }
 
     pub fn decode(_symbols: [u8; 162]) -> Self {
-        // decode symbols => fano metric sequential decoder?
+        // tbd: fano decoder
         Self {
             callsign: "".to_string(),
             locator: "".to_string(),
@@ -109,7 +110,7 @@ fn encode_char(c: char) -> u8 {
     }
 }
 
-/// Characters only fields are encoded as 0-26
+/// Character only fields are encoded as 0-26
 fn encode_alpha_only(c: char) -> u8 {
     match c {
         'A'..='Z' => c as u8 - 65,
