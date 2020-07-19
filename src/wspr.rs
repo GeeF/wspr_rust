@@ -137,9 +137,21 @@ fn source_encode_callsign(callsign: &str) -> Result<u32, ErrorCode> {
     }
 
     match (callsign_arr[0], callsign_arr[1], callsign_arr[2]) {
-        (' ', 'A'..='Z', '0'..='9') | ('A'..='Z', 'A'..='Z', '0'..='9') => (),
+        (' ', 'A'..='Z', '0'..='9')
+        | ('A'..='Z', 'A'..='Z', '0'..='9')
+        | ('0'..='9', 'A'..='Z', '0'..='9') => (),
         _ => return Err(ErrorCode::CallsignEncodeError),
     }
+
+    // last 3 characters have to be letters or space
+    match (callsign_arr[3], callsign_arr[4], callsign_arr[5]) {
+        ('A'..='Z', 'A'..='Z', 'A'..='Z')
+        | ('A'..='Z', 'A'..='Z', ' ')
+        | ('A'..='Z', ' ', ' ')
+        | (' ', ' ', ' ') => (),
+        _ => return Err(ErrorCode::CallsignEncodeError),
+    }
+
     // encode characters, packed to 28 bits maximum
     let mut encoded_callsign = encode_char(callsign_arr[0]) as u32;
     encoded_callsign = encode_char(callsign_arr[1]) as u32 + encoded_callsign * 36;
@@ -173,7 +185,7 @@ fn source_encode_locator_power(locator: &str, power: u8) -> Result<u32, ErrorCod
         ('A'..='R', 'A'..='R', '0'..='9', '0'..='9') => (),
         _ => return Err(ErrorCode::LocatorEncodeError),
     }
-    
+
     let encoded_chars: [u32; 4] = [
         encode_alpha_only(locator_arr[0]) as u32,
         encode_alpha_only(locator_arr[1]) as u32,
@@ -192,21 +204,6 @@ fn source_encode_locator_power(locator: &str, power: u8) -> Result<u32, ErrorCod
 
     // cobine locator and power
     Ok(encoded_locator as u32 * 128 + 64 + power as u32)
-}
-
-#[test]
-fn test_encode() {
-    let msg = WSPRMessage::new("DB2LA", "JO43", 30);
-    let channel_encoded = msg.encode().unwrap();
-    for i in channel_encoded.iter() {
-        print!("{}, ", i);
-    }
-    println!();
-}
-
-#[test]
-fn test_decode() {
-    let _msg = WSPRMessage::decode([0; 162]);
 }
 
 #[test]
@@ -255,29 +252,83 @@ fn test_src_encode_prepend() {
 fn test_src_encode_callsign() {
     let callsign = "DB2LA";
     let src_encoded = source_encode_callsign(callsign).unwrap();
-    println!("e: {:x}", src_encoded);
-    assert_eq!(src_encoded, 0x59f7627);
+    assert_eq!(src_encoded, 0x59f5895);
 }
 
 #[test]
 fn test_src_encode_mixed_case_callsign() {
     let callsign = "dB2La";
     let src_encoded = source_encode_callsign(callsign).unwrap();
-    println!("e: {:x}", src_encoded);
-    assert_eq!(src_encoded, 0x59f7627);
+    assert_eq!(src_encoded, 0x59f5895);
 }
 
 #[test]
 fn test_src_encode_locator_power() {
-    let locator = "JO43";
-    let src_encoded = source_encode_locator_power(locator, 30).unwrap();
-    println!("e: {:x}", src_encoded);
-    assert_eq!(src_encoded, 0x59f7627);
+    let src_encoded = source_encode_locator_power("JO43", 30).unwrap();
+    assert_eq!(src_encoded, 0x1e29de);
 }
-// TODO: locator_power encode errors
+
+#[test]
+fn test_src_encode_error_locator() {
+    let src_encoded = source_encode_locator_power("ZZ43", 30); // Illegal chars in locator (only A-R)
+    assert_eq!(src_encoded.unwrap_err(), ErrorCode::LocatorEncodeError);
+    let locator = "JO3Z"; // Illegal chars in locator (only A-R)
+    let src_encoded = source_encode_locator_power(locator, 30);
+    assert_eq!(src_encoded.unwrap_err(), ErrorCode::LocatorEncodeError);
+}
+
+#[test]
+fn test_src_encode_error_power() {
+    let src_encoded = source_encode_locator_power("JO43", 61); // power value >60
+    assert_eq!(src_encoded.unwrap_err(), ErrorCode::PowerEncodeError);
+}
 
 #[test]
 fn test_packed_src_frame() {
     let src_frame = SourceFrame::new(&WSPRMessage::new("DB2LA", "JO43", 30)).unwrap();
-    src_frame.packed_src_frame();
+    let packed_src_frame = src_frame.packed_src_frame();
+    let reference_src_frame: [u8; 50] = [
+        0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1,
+        1, 1, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0,
+    ];
+    for (left, right) in packed_src_frame.iter().zip(reference_src_frame.iter()) {
+        assert_eq!(left, right);
+    }
+}
+
+#[test]
+fn test_data_symbols() {
+    let src_frame = SourceFrame::new(&WSPRMessage::new("DB2LA", "JO43", 30)).unwrap();
+    let convolved = convolve(src_frame.packed_src_frame()).unwrap();
+    let interleaved = interleave(convolved);
+    let reference_data_symbols = [
+        0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1,
+        1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1,
+        1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0,
+        1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1,
+        1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1,
+    ];
+    for (left, right) in interleaved.iter().zip(reference_data_symbols.iter()) {
+        assert_eq!(left, right);
+    }
+}
+
+#[test]
+fn test_channel_symbols() {
+    let encoded_wspr_msg = WSPRMessage::new("DB2LA", "JO43", 30).encode().unwrap();
+    let reference_channel_symbols = [
+        1, 3, 0, 2, 0, 0, 2, 2, 1, 2, 2, 2, 3, 3, 1, 0, 2, 0, 1, 0, 2, 1, 2, 3, 1, 1, 1, 0, 2, 2,
+        2, 0, 2, 2, 1, 2, 2, 3, 2, 1, 2, 0, 0, 2, 2, 2, 1, 2, 1, 3, 2, 0, 3, 1, 0, 3, 0, 2, 0, 3,
+        3, 2, 1, 0, 2, 2, 0, 1, 1, 2, 3, 0, 3, 2, 3, 2, 3, 0, 0, 3, 2, 0, 1, 0, 1, 1, 2, 2, 2, 1,
+        3, 0, 3, 2, 3, 2, 2, 2, 1, 0, 2, 2, 2, 0, 1, 0, 0, 3, 0, 0, 3, 1, 3, 2, 3, 1, 0, 2, 3, 1,
+        2, 1, 0, 0, 0, 1, 1, 1, 0, 0, 2, 2, 2, 3, 2, 3, 0, 0, 1, 1, 2, 0, 2, 2, 0, 2, 0, 3, 3, 2,
+        3, 2, 1, 1, 0, 0, 2, 1, 3, 2, 0, 2,
+    ];
+    for (left, right) in encoded_wspr_msg
+        .iter()
+        .zip(reference_channel_symbols.iter())
+    {
+        assert_eq!(left, right);
+    }
 }
