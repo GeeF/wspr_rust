@@ -20,6 +20,9 @@ pub enum ErrorCode {
     PowerEncodeError,       // Power does not match WSPR spec
 }
 
+/// WSPR Message representation holding the unencoded data of the message
+/// 
+/// May contain invalid data. Checks are only applied on encode
 pub struct WSPRMessage {
     pub callsign: String,
     pub locator: String,
@@ -37,14 +40,12 @@ impl WSPRMessage {
 
     pub fn decode(_symbols: [u8; 162]) -> Self {
         // tbd: fano decoder
-        Self {
-            callsign: "".to_string(),
-            locator: "".to_string(),
-            power: 0,
-        }
+        unimplemented!();
     }
 
     /// Get the channel encoded 4-FSK symbols for a standard message
+    /// 
+    /// Will throw an error code if the data of the message does not conform to the spec
     pub fn encode(&self) -> Result<[u8; 162], ErrorCode> {
         let mut encoded_frame = [0u8; 162];
         let s = SourceFrame::new(self)?;
@@ -55,20 +56,16 @@ impl WSPRMessage {
 
         Ok(encoded_frame)
     }
-
-    /// Get the channel encoded 4-FSK symbols for an extended message
-    pub fn encode_extended(&self) -> ([u8; 162], [u8; 162]) {
-        ([0; 162], [0; 162])
-    }
 }
 
 /// Source encoded WSPR frame
+/// 
+/// Holds the 50 bit source encoded data in two u32s
 struct SourceFrame {
     callsign: u32,
     locator_power: u32,
 }
 
-/// SourceFrame containing the source encoded frame parameters
 impl SourceFrame {
     fn new(msg: &WSPRMessage) -> Result<Self, ErrorCode> {
         Ok(Self {
@@ -77,20 +74,22 @@ impl SourceFrame {
         })
     }
 
+    /// pack into one u64 with only the right most 50 bits used
     fn packed_src_frame(&self) -> [u8; 50] {
-        // pack into one u64 with only the right most 50 bits used
         let encoded = (self.callsign as u64) << 22 | self.locator_power as u64;
 
         let mut packed_src_frame: [u8; 50] = [0; 50];
-        for i in 0..50 {
-            packed_src_frame[i] = (encoded >> (50 - i - 1) & 1) as u8;
+        for (i, element) in packed_src_frame.iter_mut().enumerate() {
+            *element = (encoded >> (50 - i - 1) & 1) as u8;
         }
 
         packed_src_frame
     }
 }
 
-/// shift all elements in the char array to the right. Will cut the right most element if present
+/// Shift all elements in the char array to the right. Will cut the right most element if present
+/// 
+/// Used for the source encoding
 fn prepend_space(arr: &mut [char]) {
     for i in 0..5 {
         arr[5 - i] = arr[4 - i];
@@ -119,7 +118,7 @@ fn encode_alpha_only(c: char) -> u8 {
     }
 }
 
-/// tbw: steps
+/// Source encoding of the callsign checking for various constraints
 fn source_encode_callsign(callsign: &str) -> Result<u32, ErrorCode> {
     if callsign.len() < 3 || callsign.len() > 6 {
         return Err(ErrorCode::CallsignEncodeError);
@@ -164,7 +163,8 @@ fn source_encode_callsign(callsign: &str) -> Result<u32, ErrorCode> {
 }
 
 /// Source encoding for locator and power
-/// Both are combine in the final step
+/// 
+/// Both are encoded into a combined 22 bit representation
 fn source_encode_locator_power(locator: &str, power: u8) -> Result<u32, ErrorCode> {
     if locator.len() != 4 {
         return Err(ErrorCode::LocatorEncodeError);

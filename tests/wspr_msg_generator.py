@@ -53,7 +53,7 @@ if __name__ == '__main__':
             # pipe everything to file
             os.system('WSPRcode "{} {} {}" >> wspr.txt'.format(callsign.strip(), locator, str(power)))
         except:
-            print("Make sure WSPRCode.exe is in this path")
+            print("Make sure WSPRCode is in this path")
             raise
     
     print('-----------------------')
@@ -70,7 +70,7 @@ if __name__ == '__main__':
                 while not 'Decoded message:' in line:
                     line = next(f)
                 decoded = line.split(' ')[2:5]
-                #
+
                 if not ' '.join(decoded) == msg:
                     print("!!reference encoder mismatch, skipping this msg")
                     print('  reference decoded: ' + ' '.join(decoded) + '  source: ' + msg)

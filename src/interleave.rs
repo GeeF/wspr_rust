@@ -4,7 +4,7 @@ fn reverse_byte(b: u8) -> u8 {
         as u8
 }
 
-/// Interleaver for 162 convoluted WSPR data bits
+/// Interleaver for 162 convolved WSPR data bits
 pub fn interleave(data: [u8; 162]) -> [u8; 162] {
     let mut interleaved: [u8; 162] = [0; 162];
 
