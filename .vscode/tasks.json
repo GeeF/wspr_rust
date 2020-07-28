@@ -7,13 +7,28 @@
             "problemMatcher": [
                 "$rustc"
             ],
+            // "group": {
+            //     "kind": "build",
+            //     "isDefault": true
+            // },
+            "label": "Rust: cargo build - wspr"
+        },
+        {
+            "type": "shell",
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "command": "cargo",
+            "args": [
+                "build",
+                "--examples"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "label": "Rust: cargo build - wspr"
+            "label": "Rust: cargo build - wspr examples",
         },
-
         {
             "type": "cargo",
             "subcommand": "check",

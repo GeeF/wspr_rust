@@ -8,3 +8,6 @@ edition = "2018"
 name = "wspr"
 
 [dependencies]
+
+[dev-dependencies]
+hound = "3.4"
