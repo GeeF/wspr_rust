@@ -24,5 +24,8 @@ You can run it standalone or directly using `cargo` like this:
 `cargo run --example baseband_audio "DB2LA JO43 30" 1500`
 This will generate the baseband audio for the message "DB2LA JO43 30" at a base frequency of 1500 Hz.
 
+Baseband audio spectrogram:
+![Encoded baseband audio message in a spectrogram](whole_msg.jpg?raw=true "Encoded baseband audio message in a spectrogram")
+
 ## TODO:
 * Add impl.md and document a few implementation details
